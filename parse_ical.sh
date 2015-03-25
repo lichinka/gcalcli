@@ -7,8 +7,8 @@ if [ -n "${LOG}" ]; then
     #
     # create a from-to file with the lines numbers of each event
     #
-    egrep -n "(BEGIN|END)\:VCALENDAR" "${LOG}" | grep 'BEGIN:' | awk 'BEGIN { FS=":"; } { print $1 }' > /tmp/.from
-    egrep -n "(BEGIN|END)\:VCALENDAR" "${LOG}" | grep 'END:' | awk 'BEGIN { FS=":"; } { print $1 }' > /tmp/.to
+    egrep -n "(BEGIN|END)\:VCALENDAR" "${LOG}" | grep 'BEGIN:' | awk -F':' '{ print $1 }' > /tmp/.from
+    egrep -n "(BEGIN|END)\:VCALENDAR" "${LOG}" | grep 'END:' | awk -F':' '{ print $1 }' > /tmp/.to
     paste -d"${DEL}" /tmp/.from /tmp/.to > /tmp/.events
 
     #
@@ -16,12 +16,20 @@ if [ -n "${LOG}" ]; then
     #
     while read line
     do
-        BEG="$( echo "${line}" | cut -d"${DEL}" -f1 )"
-        END="$( echo "${line}" | cut -d"${DEL}" -f2 )"
+        BEG="$( echo "${line}" | awk -F"${DEL}" '{ print $1; }' )"
+        END="$( echo "${line}" | awk -F"${DEL}" '{ print $2; }' )"
         if [ -n "${BEG}" ] && [ -n "${END}" ]; then
             OUT="/tmp/.${END}.ical"
-            awk "NR >= ${BEG} && NR <= ${END}" "${LOG}" > "${OUT}"
-            echo "[INFO] Event ${OUT} created"
+            awk "NR >= ${BEG} && NR <= ${END}" "${LOG}" | tr -d '\r' > "${OUT}"
+            #
+            # check there is only one event there
+            #
+            NEVENT="$( grep -c "SUMMARY" "${OUT}" )"
+            if [ "${NEVENT}" = "0" ]; then
+                rm ${OUT}
+            elif [ "${NEVENT}" != "1" ]; then
+                echo "[WARNING] Check event <${OUT}>"
+            fi
         else
             echo "[WARNING] Invalid interval ${line}"
         fi
